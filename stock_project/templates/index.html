@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StockAI - LSTM Predictor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        body {
+            background: #000000;
+            color: white;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Grid background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-image:
+                linear-gradient(rgba(0,212,255,0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,212,255,0.04) 1px, transparent 1px);
+            background-size: 60px 60px;
+            z-index: 0;
+        }
+
+        /* Glow effect */
+        body::after {
+            content: '';
+            position: fixed;
+            top: 30%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(123,47,247,0.08) 0%, transparent 70%);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* Bull SVG */
+        .bull-container {
+            position: fixed;
+            right: 0;
+            bottom: 0;
+            width: 55%;
+            height: 100vh;
+            z-index: 1;
+            pointer-events: none;
+            display: flex;
+            align-items: flex-end;
+            justify-content: flex-end;
+        }
+
+        .bull-container svg {
+            width: 100%;
+            height: 90%;
+            opacity: 0.06;
+        }
+
+        /* Ticker tape */
+        .ticker-tape {
+            background: rgba(0,212,255,0.06);
+            border-bottom: 1px solid rgba(0,212,255,0.12);
+            padding: 8px 0;
+            overflow: hidden;
+            white-space: nowrap;
+            position: relative;
+            z-index: 10;
+        }
+
+        .ticker-content {
+            display: inline-block;
+            animation: ticker 35s linear infinite;
+            font-size: 0.78rem;
+            color: rgba(255,255,255,0.5);
+            letter-spacing: 0.5px;
+        }
+
+        .ticker-content span.up { color: #00ff88; }
+        .ticker-content span.down { color: #ff4444; }
+
+        @keyframes ticker {
+            0% { transform: translateX(100vw); }
+            100% { transform: translateX(-100%); }
+        }
+
+        /* Navbar */
+        .navbar {
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(20px);
+            padding: 1rem 2.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            position: relative;
+            z-index: 10;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            width: 34px;
+            height: 34px;
+            background: linear-gradient(135deg, #00d4ff, #7b2ff7);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+
+        .logo h1 {
+            font-size: 1.3rem;
+            background: linear-gradient(90deg, #00d4ff, #7b2ff7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .nav-badge {
+            background: rgba(0,255,136,0.08);
+            border: 1px solid rgba(0,255,136,0.25);
+            color: #00ff88;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+
+        .nav-right span:last-child {
+            color: rgba(255,255,255,0.3);
+            font-size: 0.8rem;
+        }
+
+        /* Content wrapper */
+        .content {
+            position: relative;
+            z-index: 10;
+            max-width: 620px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+        }
+
+        /* Hero */
+        .hero {
+            text-align: center;
+            padding: 4rem 0 2rem;
+        }
+
+        .hero-tag {
+            display: inline-block;
+            background: rgba(0,212,255,0.08);
+            border: 1px solid rgba(0,212,255,0.2);
+            color: #00d4ff;
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 0.72rem;
+            margin-bottom: 1.2rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .hero h2 {
+            font-size: 3.2rem;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 0.8rem;
+            letter-spacing: -1px;
+        }
+
+        .hero h2 span {
+            background: linear-gradient(90deg, #00d4ff, #7b2ff7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero p {
+            color: rgba(255,255,255,0.4);
+            font-size: 0.95rem;
+        }
+
+        /* Stats */
+        .stats-bar {
+            display: flex;
+            justify-content: center;
+            gap: 0;
+            margin: 1.5rem 0;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 14px;
+            overflow: hidden;
+        }
+
+        .stat-item {
+            flex: 1;
+            text-align: center;
+            padding: 1rem 0.5rem;
+            border-right: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .stat-item:last-child { border-right: none; }
+
+        .stat-item .val {
+            font-size: 1.3rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, #00d4ff, #7b2ff7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stat-item .lbl {
+            font-size: 0.65rem;
+            color: rgba(255,255,255,0.3);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 2px;
+        }
+
+        /* Main Card */
+        .main-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 20px;
+            padding: 1.8rem;
+            backdrop-filter: blur(30px);
+            position: relative;
+            margin-bottom: 3rem;
+        }
+
+        .main-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #00d4ff, #7b2ff7, transparent);
+            border-radius: 20px 20px 0 0;
+        }
+
+        .section-label {
+            color: rgba(255,255,255,0.3);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 0.7rem;
+        }
+
+        /* Stock Buttons */
+        .stock-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+            margin-bottom: 1.4rem;
+        }
+
+        .stock-btn {
+            padding: 6px 13px;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 7px;
+            background: rgba(255,255,255,0.03);
+            color: rgba(255,255,255,0.6);
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+
+        .stock-btn:hover {
+            border-color: rgba(0,212,255,0.35);
+            color: #00d4ff;
+            background: rgba(0,212,255,0.05);
+        }
+
+        .stock-btn.active {
+            background: rgba(0,212,255,0.08);
+            border-color: rgba(0,212,255,0.4);
+            color: #00d4ff;
+        }
+
+        /* Input */
+        .input-wrap {
+            position: relative;
+            margin-bottom: 1.1rem;
+        }
+
+        .input-wrap input {
+            width: 100%;
+            padding: 13px 16px 13px 42px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            color: white;
+            font-size: 0.9rem;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .input-wrap input:focus {
+            border-color: rgba(0,212,255,0.4);
+            background: rgba(0,212,255,0.03);
+        }
+
+        .input-wrap input::placeholder { color: rgba(255,255,255,0.2); }
+
+        .input-icon {
+            position: absolute;
+            left: 13px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1rem;
+        }
+
+        /* Predict Button */
+        .predict-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #00d4ff 0%, #7b2ff7 100%);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 0.95rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+        }
+
+        .predict-btn:hover {
+            opacity: 0.88;
+            transform: translateY(-1px);
+            box-shadow: 0 8px 25px rgba(0,212,255,0.2);
+        }
+
+        .predict-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        /* Loading */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 1.8rem;
+        }
+
+        .spinner {
+            width: 36px;
+            height: 36px;
+            border: 2px solid rgba(0,212,255,0.12);
+            border-top: 2px solid #00d4ff;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            margin: 0 auto 0.8rem;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading p { color: rgba(255,255,255,0.3); font-size: 0.8rem; letter-spacing: 2px; }
+
+        /* Result */
+        .result-card {
+            display: none;
+            margin-top: 1.3rem;
+            background: rgba(0,212,255,0.03);
+            border: 1px solid rgba(0,212,255,0.12);
+            border-radius: 14px;
+            padding: 1.5rem;
+            text-align: center;
+            animation: fadeIn 0.4s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.8rem;
+            padding-bottom: 0.8rem;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .result-company {
+            font-size: 0.78rem;
+            color: rgba(255,255,255,0.4);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .result-badge {
+            background: rgba(0,255,136,0.08);
+            border: 1px solid rgba(0,255,136,0.2);
+            color: #00ff88;
+            padding: 3px 9px;
+            border-radius: 20px;
+            font-size: 0.68rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+
+        .result-price {
+            font-size: 3.2rem;
+            font-weight: 800;
+            background: linear-gradient(90deg, #00d4ff, #7b2ff7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -1px;
+        }
+
+        .result-date {
+            color: #00d4ff;
+            font-size: 0.85rem;
+            margin-top: 0.3rem;
+            opacity: 0.8;
+        }
+
+        .result-label {
+            color: rgba(255,255,255,0.25);
+            font-size: 0.72rem;
+            margin-top: 0.2rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .result-disclaimer {
+            margin-top: 0.9rem;
+            padding-top: 0.9rem;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            color: rgba(255,255,255,0.2);
+            font-size: 0.7rem;
+        }
+
+        /* Error */
+        .error-card {
+            display: none;
+            margin-top: 1.3rem;
+            background: rgba(255,50,50,0.04);
+            border: 1px solid rgba(255,50,50,0.15);
+            border-radius: 14px;
+            padding: 1.2rem;
+            text-align: center;
+            color: #ff6b6b;
+            font-size: 0.85rem;
+        }
+
+        /* Candlesticks */
+        .candles {
+            display: flex;
+            align-items: flex-end;
+            gap: 5px;
+            justify-content: center;
+            margin-top: 1.4rem;
+            opacity: 0.2;
+        }
+
+        .candle { width: 7px; border-radius: 2px; }
+        .candle.up { background: #00ff88; }
+        .candle.down { background: #ff4444; }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            color: rgba(255,255,255,0.15);
+            font-size: 0.75rem;
+            position: relative;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Proper Trading Bull SVG Background -->
+    <div class="bull-container">
+        <svg viewBox="0 0 800 700" xmlns="http://www.w3.org/2000/svg" fill="white">
+            <!-- Body -->
+            <ellipse cx="400" cy="420" rx="200" ry="140"/>
+            <!-- Head -->
+            <ellipse cx="560" cy="310" rx="110" ry="90"/>
+            <!-- Neck -->
+            <polygon points="470,350 530,260 600,270 560,380"/>
+            <!-- Snout -->
+            <ellipse cx="650" cy="340" rx="60" ry="40"/>
+            <!-- Nostrils -->
+            <circle cx="635" cy="348" r="8" fill="#000"/>
+            <circle cx="660" cy="348" r="8" fill="#000"/>
+            <!-- Eye -->
+            <circle cx="590" cy="290" r="12" fill="#000"/>
+            <circle cx="594" cy="287" r="4" fill="white"/>
+            <!-- Left Horn -->
+            <polygon points="540,230 510,150 570,160 560,235"/>
+            <!-- Right Horn -->
+            <polygon points="590,225 580,140 640,165 605,230"/>
+            <!-- Left Front Leg -->
+            <rect x="260" y="530" width="55" height="160" rx="20"/>
+            <!-- Right Front Leg -->
+            <rect x="340" y="530" width="55" height="160" rx="20"/>
+            <!-- Left Back Leg -->
+            <rect x="430" y="530" width="55" height="160" rx="20"/>
+            <!-- Right Back Leg -->
+            <rect x="510" y="530" width="55" height="160" rx="20"/>
+            <!-- Tail -->
+            <path d="M200,380 Q140,320 150,260 Q160,200 190,220" stroke="white" stroke-width="18" fill="none" stroke-linecap="round"/>
+            <!-- Tail tuft -->
+            <ellipse cx="185" cy="215" rx="22" ry="30" transform="rotate(-20, 185, 215)"/>
+            <!-- Ear -->
+            <ellipse cx="510" cy="250" rx="28" ry="38" transform="rotate(15, 510, 250)"/>
+            <!-- Hump -->
+            <ellipse cx="350" cy="300" rx="80" ry="55"/>
+            <!-- Chest muscle -->
+            <ellipse cx="550" cy="430" rx="60" ry="45"/>
+        </svg>
+    </div>
+
+    <!-- Ticker Tape -->
+    <div class="ticker-tape">
+        <div class="ticker-content">
+            &nbsp;&nbsp;&nbsp;
+            RELIANCE.NS <span class="up">▲ 1.2%</span> &nbsp;|&nbsp;
+            TCS.NS <span class="down">▼ 0.8%</span> &nbsp;|&nbsp;
+            INFY.NS <span class="up">▲ 0.5%</span> &nbsp;|&nbsp;
+            HDFCBANK.NS <span class="up">▲ 1.1%</span> &nbsp;|&nbsp;
+            WIPRO.NS <span class="down">▼ 0.3%</span> &nbsp;|&nbsp;
+            TATAMOTORS.NS <span class="up">▲ 2.1%</span> &nbsp;|&nbsp;
+            NIFTY 50 <span class="up">▲ 22,450</span> &nbsp;|&nbsp;
+            SENSEX <span class="down">▼ 73,820</span> &nbsp;|&nbsp;
+            LSTM AI PREDICTION ENGINE ACTIVE &nbsp;&nbsp;&nbsp;
+        </div>
+    </div>
+
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="logo">
+            <div class="logo-icon">📈</div>
+            <h1>StockAI</h1>
+        </div>
+        <div class="nav-right">
+            <span class="nav-badge">● LIVE</span>
+            <span>Powered by LSTM</span>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="content">
+
+        <!-- Hero -->
+        <div class="hero">
+            <div class="hero-tag">🤖 Deep Learning Powered</div>
+            <h2>Predict <span>Tomorrow's</span><br>Stock Price</h2>
+            <p>LSTM Neural Networks trained on 6 years of NSE market data</p>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-bar">
+            <div class="stat-item">
+                <div class="val">LSTM</div>
+                <div class="lbl">Model</div>
+            </div>
+            <div class="stat-item">
+                <div class="val">1555+</div>
+                <div class="lbl">Days Trained</div>
+            </div>
+            <div class="stat-item">
+                <div class="val">60</div>
+                <div class="lbl">Day Window</div>
+            </div>
+            <div class="stat-item">
+                <div class="val">NSE</div>
+                <div class="lbl">Exchange</div>
+            </div>
+        </div>
+
+        <!-- Card -->
+        <div class="main-card">
+
+            <p class="section-label">Select Company</p>
+            <div class="stock-buttons">
+                <button class="stock-btn" onclick="selectStock('RELIANCE.NS', this)">📊 Reliance</button>
+                <button class="stock-btn" onclick="selectStock('TCS.NS', this)">💻 TCS</button>
+                <button class="stock-btn" onclick="selectStock('INFY.NS', this)">🖥️ Infosys</button>
+                <button class="stock-btn" onclick="selectStock('HDFCBANK.NS', this)">🏦 HDFC Bank</button>
+                <button class="stock-btn" onclick="selectStock('WIPRO.NS', this)">⚙️ Wipro</button>
+                <button class="stock-btn" onclick="selectStock('TATAMOTORS.NS', this)">🚗 Tata Motors</button>
+            </div>
+
+            <p class="section-label">Or Enter Symbol</p>
+            <div class="input-wrap">
+                <span class="input-icon">🔍</span>
+                <input type="text" id="ticker-input" placeholder="e.g. RELIANCE.NS, TCS.NS" />
+            </div>
+
+            <button class="predict-btn" onclick="predict()">
+                🔮 &nbsp; Predict Tomorrow's Price
+            </button>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>ANALYZING MARKET DATA...</p>
+            </div>
+
+            <div class="result-card" id="result-card">
+                <div class="result-header">
+                    <span class="result-company" id="result-company"></span>
+                    <span class="result-badge">AI PREDICTION</span>
+                </div>
+                <div class="result-price" id="result-price"></div>
+                <div class="result-date" id="result-date"></div>
+                <div class="result-label">Predicted Closing Price</div>
+                <div class="result-disclaimer">⚠️ For educational purposes only. Not financial advice.</div>
+            </div>
+
+            <div class="error-card" id="error-card">
+                <p id="error-message"></p>
+            </div>
+
+            <div class="candles">
+                <div class="candle up" style="height:28px"></div>
+                <div class="candle down" style="height:18px"></div>
+                <div class="candle up" style="height:38px"></div>
+                <div class="candle up" style="height:22px"></div>
+                <div class="candle down" style="height:14px"></div>
+                <div class="candle up" style="height:32px"></div>
+                <div class="candle down" style="height:20px"></div>
+                <div class="candle up" style="height:42px"></div>
+                <div class="candle up" style="height:26px"></div>
+                <div class="candle down" style="height:16px"></div>
+                <div class="candle up" style="height:36px"></div>
+                <div class="candle down" style="height:24px"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Built with LSTM Deep Learning &nbsp;|&nbsp; NSE India &nbsp;|&nbsp; © 2026 StockAI</p>
+    </div>
+
+    <script>
+        function selectStock(ticker, btn) {
+            document.getElementById('ticker-input').value = ticker;
+            document.querySelectorAll('.stock-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        async function predict() {
+            const ticker = document.getElementById('ticker-input').value.trim();
+            if (!ticker) { alert('Please enter a stock symbol!'); return; }
+
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('result-card').style.display = 'none';
+            document.getElementById('error-card').style.display = 'none';
+            document.querySelector('.predict-btn').disabled = true;
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ticker: ticker })
+                });
+
+                const data = await response.json();
+
+                document.getElementById('loading').style.display = 'none';
+                document.querySelector('.predict-btn').disabled = false;
+
+                if (data.success) {
+                    document.getElementById('result-company').textContent = data.ticker;
+                    document.getElementById('result-price').textContent = '₹' + data.predicted_price;
+                    document.getElementById('result-date').textContent = '📅 ' + data.date;
+                    document.getElementById('result-card').style.display = 'block';
+                } else {
+                    document.getElementById('error-message').textContent = '❌ ' + data.error;
+                    document.getElementById('error-card').style.display = 'block';
+                }
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                document.querySelector('.predict-btn').disabled = false;
+                document.getElementById('error-message').textContent = '❌ Something went wrong!';
+                document.getElementById('error-card').style.display = 'block';
+            }
+        }
+    </script>
+
+</body>
+</html>
